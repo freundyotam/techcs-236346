@@ -2,8 +2,8 @@ from z3.z3util import get_vars
 from z3 import SolverFor, ForAll, Implies, BitVecSort, BitVecVal, \
                K, Store, ArrayRef, IntSort, \
                FuncInterp, is_func_decl, substitute_vars, sat, unsat
-from presentation_forms import vertically, table_repr, Legend
-import boilerplate
+from .presentation_forms import vertically, table_repr, Legend
+# import .boilerplate
 
 
 class CHCs:
