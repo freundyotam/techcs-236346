@@ -78,12 +78,16 @@ def create_checs(pre_condition, input_vars, program, post_condition):
             offset = instruction[1]
             chcs.append(Implies(U[i](sigma), U[i + 1](*input_vars, Store(stack, sp, stack[sp - offset]), sp + 1, r0, r1)))
         elif instruction[0] == "JMP":
-            addr = instruction[1]
+            addr = program.index(instruction[1] + ":")
             chcs.append(Implies(U[i](sigma), U[addr](*input_vars, stack, sp, r0, r1)))
         elif instruction[0] == "JZ":
-            addr = instruction[1]
-            chcs.append(Implies(And(U[i](sigma), r0==0), U[addr](*input_vars, stack, sp, r0, r1)))
-            chcs.append(Implies(And(U[i](sigma), r0!=0), U[i + 1](*input_vars, stack, sp, r0, r1)))
+            addr = program.index(instruction[1] + ":")
+            chcs.append(Implies(And(U[i](sigma), r0 == 0), U[addr](*input_vars, stack, sp, r0, r1)))
+            chcs.append(Implies(And(U[i](sigma), r0 != 0), U[i + 1](*input_vars, stack, sp, r0, r1)))
+        elif instruction[0] == "JNZ":
+            addr = program.index(instruction[1] + ":")
+            chcs.append(Implies(And(U[i](sigma), r0 == 0), U[addr](*input_vars, stack, sp, r0, r1)))
+            chcs.append(Implies(And(U[i](sigma), r0 != 0), U[i + 1](*input_vars, stack, sp, r0, r1)))
 
     # Final state
     chcs.append(Implies(U[len(program)](sigma), post_condition))
