@@ -37,17 +37,17 @@ def create_checs(pre_condition, input_vars, program, post_condition):
     sp, r0, r1 = Ints('sp r0 r1')
 
     sigma = input_vars + [memory, stack, sp, r0, r1]
-    # Create the CHCs
+    # Extract instructions and labels
+    instructions, label_to_index = extract_instructions_and_labels(program)
     chcs = []
 
+    # States based on instructions only
     U = {i: Function(f"U{i}", *(v.sort() for v in sigma), BoolSort())
-         for i in range(len(program)+1)}
+         for i in range(len(instructions) + 1)}
     # Initial state
     chcs.append(Implies(pre_condition, U[0](*sigma)))
 
-
-    for i in range(len(program)):  # Do for i in range
-        instruction = program[i]
+    for i, instruction in enumerate(instructions):
         if instruction[0] == 'PUSH':
             value = instruction[1]
             chcs.append(Implies(U[i](*sigma), U[i+1](*input_vars, memory, Store(stack, sp, value), sp + 1, r0, r1)))
@@ -79,25 +79,33 @@ def create_checs(pre_condition, input_vars, program, post_condition):
             offset = instruction[1]
             chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp, stack[sp - offset]), sp + 1, r0, r1)))
         elif instruction[0] == "JMP":
-            addr = program.index(instruction[1] + ":")
+            label = instruction[1]
+            if label not in label_to_index:
+                raise ValueError(f"Label {label} not found")
+            addr = label_to_index[label]
             chcs.append(Implies(U[i](*sigma), U[addr](*input_vars, memory, stack, sp, r0, r1)))
         elif instruction[0] == "JZ":
-            addr = program.index(instruction[1] + ":")
+            label = instruction[1]
+            if label not in label_to_index:
+                raise ValueError(f"Label {label} not found")
+            addr = label_to_index[label]
             chcs.append(Implies(And(U[i](*sigma), r0 == 0), U[addr](*input_vars, memory, stack, sp, r0, r1)))
             chcs.append(Implies(And(U[i](*sigma), r0 != 0), U[i + 1](*input_vars, memory, stack, sp, r0, r1)))
         elif instruction[0] == "JNZ":
-            addr = program.index(instruction[1] + ":")
-            chcs.append(Implies(And(U[i](*sigma), r0 == 0), U[addr](*input_vars, memory, stack, sp, r0, r1)))
-            chcs.append(Implies(And(U[i](*sigma), r0 != 0), U[i + 1](*input_vars, memory, stack, sp, r0, r1)))
+            label = instruction[1]
+            if label not in label_to_index:
+                raise ValueError(f"Label {label} not found")
+            addr = label_to_index[label]
+            chcs.append(Implies(And(U[i](*sigma), r0 != 0), U[addr](*input_vars, memory, stack, sp, r0, r1)))
+            chcs.append(Implies(And(U[i](*sigma), r0 == 0), U[i + 1](*input_vars, memory, stack, sp, r0, r1)))
         elif instruction[0] == "STOR":
             # Store r0 at memory[r1]
             chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, Store(memory, r1, r0), stack, sp, r0, r1)))
         elif instruction[0] == "LOAD":
-            # Load memory[r1] and push to stack
-            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, Store(stack, sp, memory[r1]), stack, sp + 1, r0, r1)))
+            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp, memory[r1]), sp + 1, r0, r1)))
 
-    # Final state
-    chcs.append(Implies(U[len(program)](*sigma), post_condition))
+    # Final state after all instructions
+    chcs.append(Implies(U[len(instructions)](*sigma), post_condition))
     return CHCs(chcs)
 
 
