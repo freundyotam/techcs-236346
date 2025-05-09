@@ -27,11 +27,7 @@ def extract_instructions_and_labels(program):
     return instructions, label_to_index
 
 
-def create_checs(pre_condition, input_vars, program, post_condition):
-    """
-    Create a set of CHCs for a given program.
-    """
-
+def create_chcs(pre_condition, input_vars, program, post_condition):
     memory = Array("memory", IntSort(), IntSort())
     stack = Array("stack", IntSort(), IntSort())
     sp, r0, r1 = Ints('sp r0 r1')
@@ -54,12 +50,11 @@ def create_checs(pre_condition, input_vars, program, post_condition):
         elif instruction[0] == 'POP':
             amount_of_registers = instruction[1]
             if amount_of_registers == 1:
-                # For POP 1: r0 gets the top of stack (stack[sp-1]), stack pointer decreases by 1
-                chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, stack, sp - 1, stack[sp - 1], r1)))
+                chcs.append(Implies(And(U[i](*sigma), sp >= 1),
+                                   U[i + 1](*input_vars, memory, stack, sp - 1, stack[sp - 1], r1)))
             elif amount_of_registers == 2:
-                # For POP 2: r0 gets top of stack (stack[sp-1]), r1 gets second element (stack[sp-2]),
-                # stack pointer decreases by 2
-                chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, stack, sp - 2, stack[sp - 1], stack[sp - 2])))
+                chcs.append(Implies(And(U[i](*sigma), sp >= 2),
+                                   U[i + 1](*input_vars, memory, stack, sp - 2, stack[sp - 1], stack[sp - 2])))
         elif instruction[0] == 'ALU':
             op = instruction[1]
             # Compute result based on operation using r0 and r1
@@ -77,7 +72,8 @@ def create_checs(pre_condition, input_vars, program, post_condition):
             chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp, result), sp + 1, r0, r1)))
         elif instruction[0] == "DUP":
             offset = instruction[1]
-            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp, stack[sp - offset]), sp + 1, r0, r1)))
+            chcs.append(Implies(And(U[i](*sigma), sp >= offset),
+                               U[i + 1](*input_vars, memory, Store(stack, sp, stack[sp - offset]), sp + 1, r0, r1)))
         elif instruction[0] == "JMP":
             label = instruction[1]
             if label not in label_to_index:
