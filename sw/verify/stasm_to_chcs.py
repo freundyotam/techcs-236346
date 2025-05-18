@@ -24,6 +24,7 @@ def extract_instructions_and_labels(program):
             instr_index += 1
         else:
             raise ValueError(f"Invalid program item: {item}")
+    print(instructions, label_to_index)
     return instructions, label_to_index
 
 
@@ -54,7 +55,7 @@ def create_chcs(pre_condition, input_vars, program, post_condition):
                                    U[i + 1](*input_vars, memory, stack, sp - 1, stack[sp - 1], r1)))
             elif amount_of_registers == 2:
                 chcs.append(Implies(And(U[i](*sigma), sp >= 2),
-                                   U[i + 1](*input_vars, memory, stack, sp - 2, stack[sp - 1], stack[sp - 2])))
+                                    U[i + 1](*input_vars, memory, stack, sp - 2, stack[sp - 2], stack[sp - 1])))
         elif instruction[0] == 'ALU':
             op = instruction[1]
             # Compute result based on operation using r0 and r1
@@ -98,7 +99,7 @@ def create_chcs(pre_condition, input_vars, program, post_condition):
             # Store r0 at memory[r1]
             chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, Store(memory, r1, r0), stack, sp, r0, r1)))
         elif instruction[0] == "LOAD":
-            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp, memory[r1]), sp + 1, r0, r1)))
+            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp, memory[r0]), sp + 1, r0, r1)))
 
     # Final state after all instructions
     chcs.append(Implies(U[len(instructions)](*sigma), post_condition))
@@ -108,7 +109,7 @@ def create_chcs(pre_condition, input_vars, program, post_condition):
 def main():
     stack = Array("stack", IntSort(), IntSort())
     sp, r0, r1 = Ints('sp r0 r1')
-    chcs = create_checs(pre_condition=And(stack[0] == 1, stack[1] == 5, sp == 2),
+    chcs = create_chcs(pre_condition=And(stack[0] == 1, stack[1] == 5, sp == 2),
                  input_vars=[],
                  program=
                  [("PUSH", 13),
