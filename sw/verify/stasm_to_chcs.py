@@ -28,7 +28,6 @@ def extract_instructions_and_labels(program):
 
 
 def create_chcs(pre_condition, input_vars, program, post_condition):
-    print("version 7")
     memory = Array("memory", IntSort(), IntSort())
     stack = Array("stack", IntSort(), IntSort())
     sp, r0, r1 = Ints('sp r0 r1')
