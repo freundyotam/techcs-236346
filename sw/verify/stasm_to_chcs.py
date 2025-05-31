@@ -24,11 +24,11 @@ def extract_instructions_and_labels(program):
             instr_index += 1
         else:
             raise ValueError(f"Invalid program item: {item}")
-    print(instructions, label_to_index)
     return instructions, label_to_index
 
 
 def create_chcs(pre_condition, input_vars, program, post_condition):
+    print("version 7")
     memory = Array("memory", IntSort(), IntSort())
     stack = Array("stack", IntSort(), IntSort())
     sp, r0, r1 = Ints('sp r0 r1')
@@ -47,15 +47,15 @@ def create_chcs(pre_condition, input_vars, program, post_condition):
     for i, instruction in enumerate(instructions):
         if instruction[0] == 'PUSH':
             value = instruction[1]
-            chcs.append(Implies(U[i](*sigma), U[i+1](*input_vars, memory, Store(stack, sp, value), sp + 1, r0, r1)))
+            chcs.append(Implies(U[i](*sigma), U[i+1](*input_vars, memory, Store(stack, sp + 1, value), sp + 1, r0, r1)))
         elif instruction[0] == 'POP':
             amount_of_registers = instruction[1]
             if amount_of_registers == 1:
-                chcs.append(Implies(And(U[i](*sigma), sp >= 1),
-                                   U[i + 1](*input_vars, memory, stack, sp - 1, stack[sp - 1], r1)))
+                chcs.append(Implies(And(U[i](*sigma), sp >= 0),
+                                   U[i + 1](*input_vars, memory, stack, sp - 1, stack[sp], r1)))
             elif amount_of_registers == 2:
-                chcs.append(Implies(And(U[i](*sigma), sp >= 2),
-                                    U[i + 1](*input_vars, memory, stack, sp - 2, stack[sp - 2], stack[sp - 1])))
+                chcs.append(Implies(And(U[i](*sigma), sp >= 1),
+                                    U[i + 1](*input_vars, memory, stack, sp - 2, stack[sp - 1], stack[sp])))
         elif instruction[0] == 'ALU':
             op = instruction[1]
             # Compute result based on operation using r0 and r1
@@ -70,11 +70,11 @@ def create_chcs(pre_condition, input_vars, program, post_condition):
             else:
                 raise ValueError(f"Unknown ALU operation: {op}")
             # Push result onto stack at sp, increment sp
-            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp, result), sp + 1, r0, r1)))
+            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp + 1, result), sp + 1, r0, r1)))
         elif instruction[0] == "DUP":
             offset = instruction[1]
             chcs.append(Implies(And(U[i](*sigma), sp >= offset),
-                               U[i + 1](*input_vars, memory, Store(stack, sp, stack[sp - offset]), sp + 1, r0, r1)))
+                               U[i + 1](*input_vars, memory, Store(stack, sp + 1, stack[sp - offset]), sp + 1, r0, r1)))
         elif instruction[0] == "JMP":
             label = instruction[1]
             if label not in label_to_index:
@@ -99,7 +99,7 @@ def create_chcs(pre_condition, input_vars, program, post_condition):
             # Store r0 at memory[r1]
             chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, Store(memory, r1, r0), stack, sp, r0, r1)))
         elif instruction[0] == "LOAD":
-            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp, memory[r0]), sp + 1, r0, r1)))
+            chcs.append(Implies(U[i](*sigma), U[i + 1](*input_vars, memory, Store(stack, sp + 1, memory[r0]), sp + 1, r0, r1)))
 
     # Final state after all instructions
     chcs.append(Implies(U[len(instructions)](*sigma), post_condition))
@@ -107,20 +107,112 @@ def create_chcs(pre_condition, input_vars, program, post_condition):
 
 
 def main():
-    stack = Array("stack", IntSort(), IntSort())
-    sp, r0, r1 = Ints('sp r0 r1')
-    chcs = create_chcs(pre_condition=And(stack[0] == 1, stack[1] == 5, sp == 2),
-                 input_vars=[],
-                 program=
-                 [("PUSH", 13),
-                  ("POP", 2),
-                  ("ALU", "MUL"),
-                  ("POP", 2),
-                  ("ALU", "ADD"),
-                  ("POP", 1)],
-                 post_condition=stack[sp] == 1 + 5 * 13)
+    def READ_FROM_ARRAY():
+        """
+        Pops the top as index and then base addr and push the value at that index from the array at addr
+        :return:
+        """
+        return [
+            ("POP", 2),  # r0 = index, r1 = base addr
+            ("ALU", "ADD"),  # push base addr + index
+            ("POP", 1),  # r0 = base addr + index
+            ("LOAD", 0),  # push value at base addr + index
+        ]
 
-    print(chcs.solve())
+    program_find_max = [
+        ("PUSH", 0),
+        ("DUP", 2),
+        *READ_FROM_ARRAY(),
+        # Stack is now: [arr_addr, length, a[0]]
+        # Now let's define max = a[0]
+        ("DUP", 0),
+        # Stack is now: [arr_addr, length, a[0], mx=a[0]]
+        # Now after we saved a[0] on stack we can use this mem for i
+        # lets set i = 1 to memory address &a[0]
+        ("PUSH", 1),
+        ("DUP", 4),
+        ("POP", 2),
+        ("STOR", 0),
+        "CHECK_COND:",
+        # First put i in r0 and n in r1
+        ("DUP", 3),
+        ("POP", 1),
+        ("LOAD", 0),
+        ("DUP", 3),
+        ("POP", 2),
+        # Check i < n
+        ("ALU", "LT"),
+        ("POP", 1),
+        ("JNZ", "LOOP_BODY"),
+        ("JMP", "END"),
+        "LOOP_BODY:",
+        # read i from mem and put on stack
+        ("DUP", 3),
+        ("POP", 1),
+        ("LOAD", 0),
+        # put base addr on stack
+        ("DUP", 4),
+        # Put a[i] on stack
+        *READ_FROM_ARRAY(),
+        # Put mx on stack
+        ("DUP", 1),
+        # now stack is [base_addr, n, a[0], mx, a[i], mx]
+        ("POP", 2),
+        ("ALU", "LT"),
+        # now stack is [base_addr, n, a[0], mx, (result a[i] < mx)]
+        ("POP", 1),
+        ("JNZ", "INC_I"),
+        ("JMP", "UPDATE"),
+        "INC_I:",
+        # Put i on stack
+        ("PUSH", 0),
+        ("DUP", 4),
+        *READ_FROM_ARRAY(),
+        ("PUSH", 1),
+        ("POP", 2),
+        ("ALU", "ADD"),
+        ("DUP", 4),
+        ("POP", 2),
+        ("STOR", 0),
+        ("JMP", "CHECK_COND"),
+        "UPDATE:",
+        ("POP", 1),  # remove old mx from stack
+        # Push base addr
+        ("DUP", 2),
+        ("POP", 1),
+        ("LOAD", 0),
+        # Now i is on top of stack
+        ("DUP", 3),
+        *READ_FROM_ARRAY(),  # so now a[i] is where mx was on stack so mx = a[i]
+        ("JMP", "INC_I"),
+        "END:",
+        # Restore a[0]:
+        # Put a[0] on stack (we saved it before):
+        ("DUP", 1),
+        # Put base_addr on stack:
+        ("DUP", 4),
+        ("POP", 2),
+        ("STOR", 0),
+        ("POP", 2),
+        ("POP", 1),
+        ("POP", 1)
+    ]
+    stack = Array("stack", IntSort(), IntSort())
+    memory = Array("memory", IntSort(), IntSort())
+    sp, r0, r1 = Ints('sp r0 r1')
+
+    pre_condition = And(
+        stack[0] == 0, stack[1] == 1, sp == 2,
+        memory[0] == 2
+    )
+    chcs = create_chcs(pre_condition=pre_condition,
+                       input_vars=[],
+                       program=program_find_max,
+                       post_condition=And(sp == 0,
+                                          memory[0] == 2,
+                                          r1 == 9999))
+    d = {'xform.inline_eager': False, 'xform.inline_linear': False}
+    print(chcs.solve(d))
 
 
 if __name__ == '__main__':
