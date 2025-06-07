@@ -1,5 +1,9 @@
+import sys
+import os
+sys.path.append(os.path.abspath('sw/compiler'))
+
 from collections import namedtuple
-from ir import Const, Var, Seq, If, FuncDef
+from .ir import Const, Var, Seq, If, FuncDef
 
 
 class CompilerBackend:

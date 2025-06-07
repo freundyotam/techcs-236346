@@ -2,7 +2,7 @@ import re
 import pyparsing as pp
 from pyparsing import OpAssoc, one_of, infix_notation
 
-from ir import Var, Const, Seq, If, FuncDef
+from .ir import Var, Const, Seq, If, FuncDef
 
 
 # This is global :/
